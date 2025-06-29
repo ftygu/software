@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>OpenAI 多功能演示</title>
+<style>
+    body{font-family:Arial,Helvetica,sans-serif;background:#f5f5f5;margin:0;padding:0 10px;}
+    h2{color:#333;}
+    .card{background:#fff;border-radius:8px;padding:16px;margin:20px auto;max-width:800px;box-shadow:0 2px 6px rgba(0,0,0,.1);}
+    button{padding:6px 12px;border:1px solid #3085d6;background:#409eff;color:#fff;border-radius:4px;cursor:pointer;}
+    button:disabled{background:#ccc;border-color:#999;}
+    textarea,input[type=text],input[type=number]{width:100%;box-sizing:border-box;margin:6px 0 12px;padding:6px;border:1px solid #ccc;border-radius:4px;}
+    #chatbox{height:250px;overflow-y:auto;border:1px solid #ddd;padding:8px;background:#fafafa;}
+    .msg{margin:4px 0;}
+    .user{color:#1a73e8;}
+    .assistant{color:#222;}
+    .hidden{display:none;}
+    #apiKeyModal{position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.4);display:flex;align-items:center;justify-content:center;}
+    #apiKeyModal .card{max-width:400px;}
+</style>
+</head>
+<body>
+
+<!-- 1. 图片识别 -->
+<div class="card">
+    <h2>1️⃣ 图片识别 (GPT-4o Vision)</h2>
+    <input id="imgInput" type="file" accept="image/*">
+    <button id="imgBtn" disabled>上传并识别</button>
+    <p id="imgResult"></p>
+</div>
+
+<!-- 2. 鱼类体长预测 -->
+<div class="card">
+    <h2>2️⃣ 鱼类体长预测</h2>
+    <label>鱼种（中文或学名）</label>
+    <input id="fishSpecies" type="text" placeholder="例如：鲤鱼 / Cyprinus carpio">
+    <label>重量 (克)</label>
+    <input id="fishWeight" type="number" placeholder="例如：500">
+    <button id="fishBtn" disabled>预测体长</button>
+    <p id="fishResult"></p>
+</div>
+
+<!-- 3. 智能问答 -->
+<div class="card">
+    <h2>3️⃣ 智能问答聊天</h2>
+    <div id="chatbox"></div>
+    <textarea id="chatInput" rows="2" placeholder="向 GPT 提问..."></textarea>
+    <button id="chatBtn" disabled>发送</button>
+</div>
+
+<!-- API-Key 弹窗 -->
+<div id="apiKeyModal">
+    <div class="card">
+        <h3>请输入 OpenAI API Key</h3>
+        <input id="apiKeyField" type="text" placeholder="sk-...">
+        <button id="saveKeyBtn">保存</button>
+    </div>
+</div>
+
+<script>
+let OPENAI_API_KEY = "";
+
+/* ---------- 通用请求函数 ---------- */
+async function callOpenAI(messages, model="gpt-4o-mini", temperature=0.2) {
+    const resp = await fetch("https://api.openai-proxy.org/v1/chat/completions", {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${OPENAI_API_KEY}`
+        },
+        body: JSON.stringify({
+            model,
+            messages,
+            temperature
+        })
+    });
+    if(!resp.ok){
+        throw new Error(`OpenAI error: ${resp.status} ${await resp.text()}`);
+    }
+    const data = await resp.json();
+    return data.choices[0].message.content.trim();
+}
+
+/* ---------- 1. 图片识别 ---------- */
+const imgInput = document.getElementById("imgInput");
+const imgBtn = document.getElementById("imgBtn");
+const imgResult = document.getElementById("imgResult");
+
+imgInput.addEventListener("change", ()=>{ imgBtn.disabled = !imgInput.files[0]; });
+
+imgBtn.addEventListener("click", async ()=>{
+    const file = imgInput.files[0];
+    if(!file) return;
+    imgBtn.disabled = true; imgResult.textContent = "分析中...";
+    const b64 = await fileToBase64(file);
+    const messages = [
+        {role:"system",content:"你是一名鱼类图像分析助手，请用中文简洁描述这张图片中鱼的品种。"},
+        {role:"user",content:[
+            {"type":"image_url","image_url":{"url":b64}},
+            {"type":"text","text":"请识别并描述图片内容。"}
+        ]}
+    ];
+    try{
+        const answer = await callOpenAI(messages);
+        imgResult.textContent = "识别结果： " + answer;
+    }catch(e){
+        imgResult.textContent = e.message;
+    }finally{
+        imgBtn.disabled = false;
+    }
+});
+
+function fileToBase64(file){
+    return new Promise((res,rej)=>{
+        const reader = new FileReader();
+        reader.onload = ()=> res(reader.result);
+        reader.onerror = rej;
+        reader.readAsDataURL(file); // 会得到 data:image/xxx;base64,...
+    });
+}
+
+/* ---------- 2. 鱼类体长预测 ---------- */
+const fishSpecies = document.getElementById("fishSpecies");
+const fishWeight  = document.getElementById("fishWeight");
+const fishBtn     = document.getElementById("fishBtn");
+const fishResult  = document.getElementById("fishResult");
+
+function validateFish(){ fishBtn.disabled = !(fishSpecies.value && fishWeight.value); }
+fishSpecies.addEventListener("input", validateFish);
+fishWeight .addEventListener("input", validateFish);
+
+fishBtn.addEventListener("click", async ()=>{
+    fishBtn.disabled = true; fishResult.textContent = "预测中...";
+    const messages = [
+        {role:"system",content:`你是一名渔业科学家。\
+已知鱼类常用的长度-重量关系 W = a * L^b。\
+若我给出鱼种名称、重量(克)，请估算常用的全长 (总长, TL) 和标准长 (SL)，单位厘米。\
+请基于已知文献或常见经验参数给出大致区间，直接给我预测的数据即可,不需要多余回答。结果用简体中文。`},
+        {role:"user",content:`鱼种: ${fishSpecies.value}\n重量: ${fishWeight.value} g`}
+    ];
+    try{
+        const answer = await callOpenAI(messages,"gpt-4o-mini");
+        fishResult.textContent = answer;
+    }catch(e){
+        fishResult.textContent = e.message;
+    }finally{
+        fishBtn.disabled = false;
+    }
+});
+
+/* ---------- 3. 智能问答聊天 ---------- */
+const chatbox   = document.getElementById("chatbox");
+const chatInput = document.getElementById("chatInput");
+const chatBtn   = document.getElementById("chatBtn");
+let chatHistory = [{role:"system",content:"你是一个友好的中文助手。"}];
+
+function appendMsg(text,cls){
+    const div=document.createElement("div");
+    div.className="msg "+cls;
+    div.textContent=text;
+    chatbox.appendChild(div);
+    chatbox.scrollTop = chatbox.scrollHeight;
+}
+
+chatInput.addEventListener("input",()=>{ chatBtn.disabled = !chatInput.value.trim(); });
+
+chatBtn.addEventListener("click", async ()=>{
+    const q = chatInput.value.trim();
+    if(!q) return;
+    appendMsg("🧑‍💻: "+q,"user");
+    chatHistory.push({role:"user",content:q});
+    chatInput.value=""; chatBtn.disabled=true;
+    try{
+        const a = await callOpenAI(chatHistory,"gpt-4o-mini",0.7);
+        appendMsg("🤖: "+a,"assistant");
+        chatHistory.push({role:"assistant",content:a});
+    }catch(e){
+        appendMsg("错误: "+e.message,"assistant");
+    }
+});
+
+/* ---------- API-Key 逻辑 ---------- */
+const modal = document.getElementById("apiKeyModal");
+document.getElementById("saveKeyBtn").onclick = ()=>{
+    const key = document.getElementById("apiKeyField").value.trim();
+    if(!key.startsWith("sk-")){ alert("无效的 Key"); return; }
+    OPENAI_API_KEY = key;
+    modal.style.display="none";
+    // 激活按钮
+    [imgBtn,fishBtn,chatBtn].forEach(btn=>btn.disabled=false);
+};
+</script>
+</body>
+</html>

@@ -1,0 +1,472 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>水产品价格数据可视化</title>
+  <script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
+  <style>
+    .chart-container {
+      width: 100%;
+      height: calc(100% - 80px);
+    }
+    .control-panel {
+      padding: 10px;
+      text-align: center;
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 10px;
+    }
+    .btn {
+      background-color: #4CAF50;
+      border: none;
+      color: white;
+      padding: 10px 20px;
+      text-align: center;
+      text-decoration: none;
+      display: inline-block;
+      font-size: 16px;
+      margin: 4px 2px;
+      cursor: pointer;
+      border-radius: 4px;
+      transition: background-color 0.3s;
+    }
+    .btn:hover {
+      background-color: #45a049;
+    }
+    .upload-btn {
+      background-color: #2196F3;
+    }
+    .upload-btn:hover {
+      background-color: #0b7dda;
+    }
+    .download-btn {
+      background-color: #9C27B0;
+    }
+    .download-btn:hover {
+      background-color: #7b1fa2;
+    }
+    .warning {
+      color: #e74c3c;
+      font-weight: bold;
+      margin-top: 10px;
+      padding: 10px;
+      background-color: rgba(231, 76, 60, 0.1);
+      border-left: 4px solid #e74c3c;
+      display: none;
+    }
+  </style>
+</head>
+<body style="margin: 0; padding: 0; height: 100vh; box-sizing: border-box; font-family: Arial, sans-serif;">
+  <div class="control-panel">
+    <button class="btn" id="toggleChart">切换图表</button>
+    <button class="btn download-btn" id="downloadChart">下载图表</button>
+    <button class="btn upload-btn" id="importData">导入数据</button>
+    <input type="file" id="fileInput" accept=".json" style="display: none;">
+    <button class="btn" id="exportData">导出数据</button>
+  </div>
+  <div id="main" class="chart-container"></div>
+  <div id="warningMessage" class="warning"></div>
+  <script>
+    // 创建 ECharts 实例
+    const myChart = echarts.init(document.getElementById('main'));
+    
+    // 原始数据
+    const rawData = [
+      [{"二级分类":"淡水鱼","品名":"鲤鱼","最低价":8.5,"平均价":8.5,"最高价":8.5},{"二级分类":"淡水鱼","品名":"草鱼","最低价":9.0,"平均价":10.3,"最高价":13.0},{"二级分类":"淡水鱼","品名":"鲫鱼","最低价":13.0,"平均价":15.5,"最高价":18.0},{"二级分类":"淡水鱼","品名":"胖头鱼","最低价":10.5,"平均价":11.1,"最高价":12.0},{"二级分类":"淡水鱼","品名":"武昌鱼","最低价":11.5,"平均价":11.75,"最高价":12.0},{"二级分类":"淡水鱼","品名":"鲢鱼","最低价":4.5,"平均价":4.8,"最高价":5.0},{"二级分类":"淡水鱼","品名":"鲶鱼","最低价":4.5,"平均价":5.25,"最高价":6.0},{"二级分类":"淡水鱼","品名":"松花鱼","最低价":12.0,"平均价":12.0,"最高价":12.0},{"二级分类":"淡水鱼","品名":"黑鱼","最低价":10.5,"平均价":11.75,"最高价":13.0},{"二级分类":"淡水鱼","品名":"黄鳝","最低价":32.0,"平均价":35.8,"最高价":40.0},{"二级分类":"淡水鱼","品名":"罗非鱼","最低价":10.5,"平均价":11.0,"最高价":11.5}],
+      [{"二级分类":"海水鱼","品名":"三文鱼肉","最低价":60.0,"平均价":85.0,"最高价":110.0},{"二级分类":"海水鱼","品名":"燕鲅","最低价":18.0,"平均价":20.5,"最高价":23.0},{"二级分类":"海水鱼","品名":"鲐鲅","最低价":5.0,"平均价":5.75,"最高价":6.5},{"二级分类":"海水鱼","品名":"小黄花鱼","最低价":6.0,"平均价":8.5,"最高价":11.0},{"二级分类":"海水鱼","品名":"鲽鱼","最低价":32.0,"平均价":33.0,"最高价":34.0},{"二级分类":"海水鱼","品名":"红星斑","最低价":125.0,"平均价":127.5,"最高价":130.0},{"二级分类":"海水鱼","品名":"多宝鱼","最低价":30.0,"平均价":31.0,"最高价":32.0},{"二级分类":"海水鱼","品名":"石斑鱼","最低价":38.0,"平均价":39.0,"最高价":40.0},{"二级分类":"海水鱼","品名":"鳕鱼","最低价":5.0,"平均价":5.75,"最高价":6.5},{"二级分类":"海水鱼","品名":"带鱼","最低价":9.0,"平均价":13.5,"最高价":19.0},{"二级分类":"海水鱼","品名":"黄花鱼","最低价":25.0,"平均价":27.8,"最高价":30.0},{"二级分类":"海水鱼","品名":"平鱼","最低价":11.0,"平均价":12.0,"最高价":13.0}],
+      [{"二级分类":"虾蟹类","品名":"白虾","最低价":20.0,"平均价":22.6,"最高价":26.0},{"二级分类":"虾蟹类","品名":"白虾（笼装）","最低价":32.0,"平均价":33.0,"最高价":34.0},{"二级分类":"虾蟹类","品名":"白虾（精品）","最低价":33.0,"平均价":34.0,"最高价":35.0},{"二级分类":"虾蟹类","品名":"小海白虾","最低价":25.0,"平均价":27.5,"最高价":30.0},{"二级分类":"虾蟹类","品名":"小河虾","最低价":22.0,"平均价":31.3,"最高价":40.0},{"二级分类":"虾蟹类","品名":"琵琶虾","最低价":65.0,"平均价":70.0,"最高价":75.0},{"二级分类":"虾蟹类","品名":"小青龙虾","最低价":150.0,"平均价":155.0,"最高价":160.0},{"二级分类":"虾蟹类","品名":"虾仁","最低价":31.0,"平均价":31.5,"最高价":32.0},{"二级分类":"虾蟹类","品名":"基围虾","最低价":150.0,"平均价":170.0,"最高价":190.0},{"二级分类":"虾蟹类","品名":"罗氏虾","最低价":78.0,"平均价":79.0,"最高价":80.0},{"二级分类":"虾蟹类","品名":"波士顿龙虾","最低价":160.0,"平均价":165.0,"最高价":170.0},{"二级分类":"虾蟹类","品名":"澳洲龙虾","最低价":310.0,"平均价":320.0,"最高价":330.0},{"二级分类":"虾蟹类","品名":"玫瑰龙虾","最低价":250.0,"平均价":255.0,"最高价":260.0},{"二级分类":"虾蟹类","品名":"小龙虾","最低价":14.0,"平均价":18.0,"最高价":23.0}],
+      [{"二级分类":"贝壳类","品名":"鲍鱼","最低价":5.0,"平均价":8.5,"最高价":12.0},{"二级分类":"贝壳类","品名":"扇贝","最低价":38.0,"平均价":46.3,"最高价":60.0},{"二级分类":"贝壳类","品名":"小红扇贝","最低价":9.0,"平均价":9.5,"最高价":10.0},{"二级分类":"贝壳类","品名":"象拔蚌","最低价":80.0,"平均价":82.5,"最高价":85.0},{"二级分类":"贝壳类","品名":"花螺","最低价":28.0,"平均价":46.5,"最高价":65.0},{"二级分类":"贝壳类","品名":"钉螺","最低价":5.5,"平均价":6.25,"最高价":7.0},{"二级分类":"贝壳类","品名":"海螺","最低价":15.0,"平均价":22.5,"最高价":35.0},{"二级分类":"贝壳类","品名":"蛏子","最低价":18.0,"平均价":19.0,"最高价":20.0},{"二级分类":"贝壳类","品名":"带子","最低价":8.0,"平均价":9.0,"最高价":10.0},{"二级分类":"贝壳类","品名":"生蚝","最低价":8.0,"平均价":9.0,"最高价":10.0},{"二级分类":"贝壳类","品名":"黄蚬子","最低价":13.0,"平均价":15.5,"最高价":18.0},{"二级分类":"贝壳类","品名":"文蛤","最低价":9.0,"平均价":9.5,"最高价":10.0},{"二级分类":"贝壳类","品名":"白蛤","最低价":5.0,"平均价":6.5,"最高价":8.0}],
+      [{"二级分类":"其他类","品名":"甲鱼","最低价":20.0,"平均价":28.5,"最高价":35.0},{"二级分类":"其他类","品名":"蚕蛹","最低价":55.0,"平均价":56.5,"最高价":58.0},{"二级分类":"其他类","品名":"牛蛙","最低价":10.0,"平均价":10.0,"最高价":10.0},{"二级分类":"其他类","品名":"海蜇头","最低价":9.0,"平均价":10.5,"最高价":12.0},{"二级分类":"其他类","品名":"海蜇皮","最低价":12.0,"平均价":13.5,"最高价":15.0},{"二级分类":"其他类","品名":"海蜇丝","最低价":5.0,"平均价":6.0,"最高价":7.0}]
+    ];
+    
+    // 当前数据
+    let currentRawData = [...rawData];
+    
+    // 转换数据格式
+    function transformData(rawData) {
+      // 扁平化数据
+      const flattenedData = [].concat(...rawData);
+      
+      // 按二级分类分组
+      const categoryMap = {};
+      flattenedData.forEach(item => {
+        if (!categoryMap[item.二级分类]) {
+          categoryMap[item.二级分类] = [];
+        }
+        categoryMap[item.二级分类].push(item);
+      });
+      
+      // 构建树图数据结构
+      const treeData = Object.keys(categoryMap).map(category => {
+        const items = categoryMap[category];
+        const children = items.map(item => ({
+          name: item.品名,
+          value: item.平均价,
+          itemStyle: {
+            color: getCategoryColor(category, item.平均价)
+          },
+          originData: item
+        }));
+        
+        return {
+          name: category,
+          value: children.reduce((sum, child) => sum + child.value, 0),
+          children: children
+        };
+      });
+      
+      // 按平均价排序
+      flattenedData.sort((a, b) => b.平均价 - a.平均价);
+      
+      return { treeData, flattenedData };
+    }
+    
+    // 根据分类和价格获取颜色
+    function getCategoryColor(category, value) {
+      const baseColors = {
+        '淡水鱼': '#3498db',
+        '海水鱼': '#2ecc71',
+        '虾蟹类': '#e74c3c',
+        '贝壳类': '#9b59b6',
+        '其他类': '#f39c12'
+      };
+      
+      // 根据价格调整颜色亮度
+      if (value === undefined) return baseColors[category] || '#34495e';
+      
+      const baseColor = baseColors[category] || '#34495e';
+      const color = echarts.color.parse(baseColor);
+      const brightnessFactor = 0.5 + (value / 320) * 0.5; // 假设最高价为320
+      
+      return echarts.color.stringify([
+        Math.min(255, Math.round(color[0] * brightnessFactor)),
+        Math.min(255, Math.round(color[1] * brightnessFactor)),
+        Math.min(255, Math.round(color[2] * brightnessFactor))
+      ], 'rgb');
+    }
+    
+    // 预警功能：检查数据是否超过阈值
+    function checkWarning(data) {
+      const flattenedData = [].concat(...data);
+      const warningThreshold = 150; // 设定预警阈值为150元
+      const hasWarning = flattenedData.some(item => item.平均价 > warningThreshold);
+      
+      const warningMessage = document.getElementById('warningMessage');
+      if (hasWarning) {
+        warningMessage.innerHTML = "触发预警，数据有异常（平均价格超过150元）";
+        warningMessage.style.display = "block";
+      } else {
+        warningMessage.style.display = "none";
+      }
+      
+      return hasWarning;
+    }
+    
+    // 处理数据并检查预警
+    function processDataAndCheckWarning(rawData) {
+      const { treeData, flattenedData } = transformData(rawData);
+      checkWarning(rawData);
+      return { treeData, flattenedData };
+    }
+    
+    const { treeData, flattenedData } = processDataAndCheckWarning(currentRawData);
+    
+    // 统一的过渡配置
+    const transitionConfig = {
+      duration: 1000,
+      easing: 'cubicInOut'
+    };
+    
+    // 矩形树图配置
+    const treemapOption = {
+      backgroundColor: 'transparent',
+      tooltip: {
+        trigger: 'item',
+        formatter: (params) => {
+          const data = params.data;
+          if (data.originData) {
+            return `
+              <div style="font-weight:bold;">${data.name}</div>
+              <div>平均价: ${data.value} 元</div>
+              <div>最低价: ${data.originData.最低价} 元</div>
+              <div>最高价: ${data.originData.最高价} 元</div>
+            `;
+          }
+          return `${data.name}: ${data.value.toFixed(1)} 元`;
+        }
+      },
+      series: [
+        {
+          type: 'treemap',
+          id: 'aquatic-products',
+          data: treeData,
+          roam: false,
+          label: {
+            show: true,
+            formatter: function(params) {
+              // 只显示分类名，不显示具体品名
+              return params.data.children ? params.data.name : '';
+            },
+            color: '#fff',
+            fontSize: 14,
+            fontWeight: 'bold',
+            showOverflow: true,
+            overflow: 'truncate'
+          },
+          upperLabel: {
+            show: true,
+            height: 30,
+            color: '#333',
+            fontSize: 16,
+            fontWeight: 'bold',
+            backgroundColor: 'rgba(255,255,255,0.8)',
+            borderColor: '#eee',
+            borderRadius: 4,
+            padding: 5
+          },
+          itemStyle: {
+            borderWidth: 2,
+            borderColor: '#fff'
+          },
+          levels: [
+            {
+              itemStyle: {
+                borderWidth: 0,
+                gapWidth: 5
+              }
+            },
+            {
+              colorSaturation: [0.35, 0.5],
+              itemStyle: {
+                borderWidth: 2,
+                gapWidth: 2
+              },
+              label: {
+                show: false
+              }
+            }
+          ],
+          animation: true,
+          animationDuration: transitionConfig.duration,
+          animationEasing: transitionConfig.easing,
+          universalTransition: {
+            enabled: true,
+            seriesKey: ['aquatic-products']
+          }
+        }
+      ]
+    };
+    
+    // 柱形图配置
+    const barOption = {
+      backgroundColor: 'transparent',
+      tooltip: {
+        trigger: 'axis',
+        axisPointer: {
+          type: 'shadow'
+        },
+        formatter: (params) => {
+          const data = params[0].data;
+          return `
+            <div style="font-weight:bold;">${data[0]}</div>
+            <div>平均价: ${data[1]} 元</div>
+            <div>最低价: ${data[3]} 元</div>
+            <div>最高价: ${data[4]} 元</div>
+          `;
+        }
+      },
+      dataset: [
+        {
+          dimensions: ['品名', '平均价', '二级分类', '最低价', '最高价'],
+          source: flattenedData.map(item => [
+            item.品名, 
+            item.平均价, 
+            item.二级分类,
+            item.最低价,
+            item.最高价
+          ])
+        }
+      ],
+      xAxis: {
+        type: 'category',
+        axisLabel: { 
+          interval: 0, 
+          rotate: 45,
+          fontSize: 10,
+          color: '#333'
+        },
+        axisLine: {
+          lineStyle: {
+            color: '#999'
+          }
+        }
+      },
+      yAxis: {
+        name: '价格 (元)',
+        type: 'value',
+        axisLine: {
+          lineStyle: {
+            color: '#999'
+          }
+        },
+        splitLine: {
+          lineStyle: {
+            color: '#eee'
+          }
+        }
+      },
+      series: {
+        type: 'bar',
+        encode: { x: '品名', y: '平均价' },
+        itemStyle: {
+          color: (params) => {
+            const category = flattenedData[params.dataIndex].二级分类;
+            return getCategoryColor(category);
+          }
+        },
+        animation: true,
+        animationDuration: transitionConfig.duration,
+        animationEasing: transitionConfig.easing,
+        universalTransition: {
+          enabled: true,
+          seriesKey: ['aquatic-products']
+        }
+      }
+    };
+    
+    // 初始显示矩形树图
+    let currentOption = 'treemap';
+    myChart.setOption(treemapOption);
+    
+    // 切换图表函数
+    function toggleChart() {
+      // 添加淡出效果
+      myChart.setOption({
+        series: {
+          id: 'aquatic-products',
+          animationDuration: 500,
+          opacity: 0
+        },
+        // 切换时隐藏/显示对应坐标系
+        xAxis: currentOption === 'treemap' ? { show: false } : { show: true },
+        yAxis: currentOption === 'treemap' ? { show: false } : { show: true }
+      });
+
+      // 延迟切换图表类型
+      setTimeout(() => {
+        currentOption = currentOption === 'treemap' ? 'bar' : 'treemap';
+        myChart.setOption(currentOption === 'treemap' ? treemapOption : barOption, {
+          // 关闭默认动画，避免与淡出效果冲突
+          notMerge: true,
+          animation: false
+        });
+      }, 500);
+    }
+    
+    // 下载图表功能
+    function downloadChart() {
+      // 等待图表渲染完成
+      myChart.showLoading();
+      setTimeout(() => {
+        myChart.hideLoading();
+        const url = myChart.getDataURL({
+          type: 'png',
+          pixelRatio: 2
+        });
+        
+        // 创建下载链接
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `水产品价格可视化_${new Date().toISOString().slice(0,19).replace(/:/g,'-')}.png`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+      }, 500);
+    }
+    
+    // 导出数据功能
+    function exportData() {
+      const dataString = JSON.stringify(currentRawData, null, 2);
+      const dataUri = 'data:application/json;charset=utf-8,' + encodeURIComponent(dataString);
+      
+      const a = document.createElement('a');
+      a.href = dataUri;
+      a.download = `水产品价格数据_${new Date().toISOString().slice(0,19).replace(/:/g,'-')}.json`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+    }
+    
+    // 导入数据功能
+    function importData() {
+      document.getElementById('fileInput').click();
+    }
+    
+    // 处理文件上传
+    function handleFileUpload(event) {
+      const file = event.target.files[0];
+      if (!file) return;
+      
+      const reader = new FileReader();
+      reader.onload = function(e) {
+        try {
+          const importedData = JSON.parse(e.target.result);
+          // 验证数据格式
+          if (Array.isArray(importedData) && importedData.every(item => 
+            Array.isArray(item) && item.every(product => 
+              product.二级分类 && product.品名 && 
+              typeof product.最低价 === 'number' && 
+              typeof product.平均价 === 'number' && 
+              typeof product.最高价 === 'number'
+            )
+          )) {
+            currentRawData = importedData;
+            const { treeData, flattenedData } = processDataAndCheckWarning(currentRawData);
+            
+            // 更新图表数据
+            treemapOption.series[0].data = treeData;
+            barOption.dataset[0].source = flattenedData.map(item => [
+              item.品名, 
+              item.平均价, 
+              item.二级分类,
+              item.最低价,
+              item.最高价
+            ]);
+            
+            // 切换到当前图表类型并重新渲染
+            myChart.setOption(currentOption === 'treemap' ? treemapOption : barOption);
+            alert('数据导入成功！');
+          } else {
+            alert('数据格式不正确，请确保数据结构与示例一致');
+          }
+        } catch (error) {
+          alert('数据解析失败，请检查文件格式：' + error.message);
+        }
+      };
+      reader.readAsText(file);
+    }
+    
+    // 按钮点击事件
+    document.getElementById('toggleChart').addEventListener('click', toggleChart);
+    document.getElementById('downloadChart').addEventListener('click', downloadChart);
+    document.getElementById('exportData').addEventListener('click', exportData);
+    document.getElementById('importData').addEventListener('click', importData);
+    document.getElementById('fileInput').addEventListener('change', handleFileUpload);
+    
+    // 自动切换（可根据需要调整或移除）
+    let autoToggleInterval = setInterval(toggleChart, 5000);
+    
+    // 鼠标悬停时暂停自动切换
+    document.getElementById('main').addEventListener('mouseenter', () => {
+      clearInterval(autoToggleInterval);
+    });
+    
+    // 鼠标离开时恢复自动切换
+    document.getElementById('main').addEventListener('mouseleave', () => {
+      autoToggleInterval = setInterval(toggleChart, 5000);
+    });
+  </script>
+</body>
+</html>
